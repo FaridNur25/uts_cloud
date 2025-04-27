@@ -1,0 +1,45 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches:
+      - main # bisa ganti ke branch yang kamu mau
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Deploy Frontend and Backend
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
+          cd /var/www/html/
+          sudo git init
+          
+          sudo git reset --hard HEAD
+          sudo git clean -fd
+          sudo git remote add origin https://github.com/FaridNur25/uts_cloud.git
+          sudo git pull origin main
+          sudo systemctl reload httpd 
+        
+          echo "SSH to Backend Instance..."
+          ssh -i ~/Tes.pem ec2-user@30.0.2.11 << 'INNER_EOF'
+            cd CloudComputingWebServer/BackEnd
+            sudo git reset --hard HEAD
+            sudo git clean -fd
+            sudo yum install git -y
+            sudo git pull origin main
+            npm install
+            pm2 restart all
+          INNER_EOF
+        EOF
