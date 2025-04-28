@@ -34,7 +34,7 @@ jobs:
         
           echo "SSH to Backend Instance..."
           ssh -i "komputer.pem" ec2-user@10.0.2.247 << 'INNER_EOF'
-            cd BackEnd
+            cd Backend
             sudo git reset --hard HEAD
             sudo git clean -fd
             sudo yum install git -y
