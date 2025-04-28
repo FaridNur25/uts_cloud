@@ -1,45 +1,50 @@
-name: Deploy to AWS EC2
+name: Deploy App
 
 on:
   push:
     branches:
-      - main # bisa ganti ke branch yang kamu mau
+      - main  # Sesuai repo kamu, bukan master
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup SSH
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-    - name: Deploy Frontend and Backend
-      run: |
-        ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
-          cd /var/www/html/
-          sudo git init
-          
-          sudo git reset --hard HEAD
-          sudo git clean -fd
-          sudo git remote add origin https://github.com/FaridNur25/uts_cloud.git
-          sudo git pull origin main
-          sudo systemctl reload httpd 
-        
-          echo "SSH to Backend Instance..."
-          ssh -i "komputer.pem" ec2-user@10.0.2.247 << 'INNER_EOF'
-            cd Backend
-            sudo git reset --hard HEAD
+      - name: Deploy Frontend and Backend to Frontend EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
+            cd /var/www/html/
+            sudo git init
+            sudo git remote remove origin || true
+            sudo git remote add origin https://github.com/FaridNur25/uts_cloud.git
+            sudo git fetch origin main
+            sudo git reset --hard origin/main
             sudo git clean -fd
-            sudo yum install git -y
-            sudo git pull origin main
-            npm install
-            pm2 restart all
-          INNER_EOF
-        EOF
+            sudo chown -R apache:apache /var/www/html
+            sudo chmod -R 755 /var/www/html
+            sudo systemctl reload httpd
+
+            echo "SSH to Backend Instance..."
+            # masuk ke backend server dari frontend server
+            ssh -i "komputer.pem" -o StrictHostKeyChecking=no ec2-user@10.0.2.247 << 'INNER_EOF'
+              cd ~/backend
+              sudo git init
+              sudo git remote remove origin || true
+              sudo git remote add origin https://github.com/FaridNur25/uts_cloud.git
+              sudo git fetch origin main
+              sudo git reset --hard origin/main
+              sudo git clean -fd
+              npm install
+              pm2 restart all || pm2 start server.js
+            INNER_EOF
+          EOF
